@@ -1,0 +1,17 @@
+- name: Install WireGuard
+  hosts: tpot
+  become: true
+  vars:
+    ansible_port: 64295
+
+  tasks:
+    - name: Wait for SSH on new port
+      wait_for_connection:
+        timeout: 600
+
+    - name: Install WireGuard
+      apt:
+        name:
+          - wireguard
+        state: present
+        update_cache: true

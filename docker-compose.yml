@@ -1,0 +1,15 @@
+services:
+  ansible:
+    image: alpine/ansible
+    environment:
+      - "ANSIBLE_HOST_KEY_CHECKING=False"
+      - "GITHUB_URL=https://github.com/telekom-security/tpotce"
+      - "DEPLOY_PATH=/home/deployer/tpotce"
+      - "CERT_OUTPUT_DIR=/sdata/certs"
+    volumes:
+      - ./ssh_keys:/root/.ssh
+      - ./playbooks:/playbooks
+      - ./inventory.ini:/apps/inventory.ini
+      - ./templates:/templates
+      - ./files:/files
+    entrypoint: ["tail", "-f", "/dev/null"]
