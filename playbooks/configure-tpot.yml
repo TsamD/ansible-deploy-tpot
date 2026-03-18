@@ -10,25 +10,44 @@
       wait_for_connection:
         timeout: 600
 
-    - name: Stop T-Pot
-      systemd:
-        name: tpot
-        state: stopped
-
     - name: Copy .env
       copy:
         src: /files/.env
         dest: "{{ tpot_path }}/.env"
         mode: "0600"
+        backup: true
 
     - name: Copy docker-compose.yml
       copy:
         src: /files/docker-compose.yml
         dest: "{{ tpot_path }}/docker-compose.yml"
         mode: "0644"
+        backup: true
 
-    - name: Start T-Pot
-      systemd:
-        name: tpot
-        state: started
-        enabled: true
+    - name: Stop T-Pot stack
+      become_user: deployer
+      command: docker compose down
+      args:
+        chdir: "{{ tpot_path }}"
+
+    - name: Start T-Pot stack
+      become_user: deployer
+      command: docker compose up -d
+      args:
+        chdir: "{{ tpot_path }}"
+
+    - name: Wait for Docker containers to settle
+      pause:
+        seconds: 20
+
+    - name: Get running containers
+      command: docker ps --format '{{ "{{.Names}}" }}'
+      register: docker_ps
+      changed_when: false
+
+    - name: Check cowrie is running
+      assert:
+        that:
+          - "'cowrie' in docker_ps.stdout_lines"
+        fail_msg: "Cowrie n'est pas démarré."
+        success_msg: "Cowrie est bien démarré."

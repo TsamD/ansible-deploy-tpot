@@ -1,0 +1,127 @@
+- name: Install T-Pot
+  hosts: tpot
+  become: true
+  vars:
+    tpot_repo_url: "{{ lookup('env', 'GITHUB_URL') }}"
+    tpot_path: "{{ lookup('env', 'DEPLOY_PATH') }}"
+
+  tasks:
+    - name: Clone T-Pot repository as deployer
+      git:
+        repo: "{{ tpot_repo_url }}"
+        dest: "{{ tpot_path }}"
+        update: yes
+        force: true
+      become_user: deployer
+
+    - name: Run installer as deployer
+      command: ./install.sh -s -t l -u webuser -p w3b$ecret
+      args:
+        chdir: "{{ tpot_path }}"
+      become_user: deployer
+      changed_when: true
+
+    - name: Reboot after install
+      reboot:
+        reboot_timeout: 3600
+
+    - name: Wait for host to come back
+      wait_for_connection:
+        delay: 15
+        timeout: 600
+
+    - name: Wait for old SSH to go down
+      wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
+        state: drained
+        timeout: 120
+      delegate_to: localhost
+      ignore_errors: true
+
+    - name: Wait for new SSH port
+      wait_for:
+        host: "{{ ansible_host }}"
+        port: 64295
+        state: started
+        timeout: 600
+      delegate_to: localhost
+
+    - name: Reset SSH connection
+      meta: reset_connection
+
+    - name: Wait for Elasticsearch to be healthy
+      shell: docker inspect --format='{{ "{{.State.Health.Status}}" }}' elasticsearch
+      register: es_health
+      retries: 40
+      delay: 15
+      until: es_health.stdout == "healthy"
+      changed_when: false
+
+    - name: Wait for Kibana to be healthy
+      shell: docker inspect --format='{{ "{{.State.Health.Status}}" }}' kibana
+      register: kibana_health
+      retries: 40
+      delay: 15
+      until: kibana_health.stdout == "healthy"
+      changed_when: false
+
+    - name: Wait for first logstash index
+      shell: "curl -s http://127.0.0.1:64298/_cat/indices | grep logstash-"
+      register: logstash_index
+      retries: 20
+      delay: 15
+      until: logstash_index.rc == 0
+      changed_when: false
+    - name: Wait for Kibana index to exist
+      shell: "curl -s http://127.0.0.1:64298/_cat/indices | grep .kibana"
+      register: kibana_index
+      retries: 20
+      delay: 15
+      until: kibana_index.rc == 0
+      changed_when: false
+    - name: Copy custom .env
+      copy:
+        src: ../files/.env
+        dest: "{{ tpot_path }}/.env"
+        owner: deployer
+        group: deployer
+        mode: '0644'
+        backup: true
+
+    - name: Copy custom docker-compose.yml
+      copy:
+        src: ../files/docker-compose.yml
+        dest: "{{ tpot_path }}/docker-compose.yml"
+        owner: deployer
+        group: deployer
+        mode: '0644'
+        backup: true
+
+    - name: Stop T-Pot stack
+      become_user: deployer
+      command: docker compose down
+      args:
+        chdir: "{{ tpot_path }}"
+
+    - name: Start T-Pot stack with custom files
+      become_user: deployer
+      command: docker compose up -d
+      args:
+        chdir: "{{ tpot_path }}"
+
+    - name: Wait for Docker containers to settle
+      pause:
+        seconds: 20
+
+    - name: Get running containers
+      command: docker ps --format '{{ "{{.Names}}" }}'
+      register: docker_ps
+      changed_when: false
+
+    - name: Check cowrie is running
+      assert:
+        that:
+          - "'cowrie' in docker_ps.stdout_lines"
+        fail_msg: "Cowrie n'est pas démarré."
+        success_msg: "Cowrie est bien démarré."
