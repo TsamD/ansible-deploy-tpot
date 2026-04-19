@@ -24,6 +24,26 @@
         mode: "0644"
         backup: true
 
+    - name: Copy forwarder folder
+      copy:
+        src: /files/forwarder/
+        dest: "{{ tpot_path }}/docker/forwarder/"
+        mode: "0644"
+        backup: true
+    - name: Set TPOT_NAME in forwarder .env
+      lineinfile:
+        path: "{{ tpot_path }}/docker/forwarder/.env"
+        regexp: '^TPOT_NAME='
+        line: "TPOT_NAME=tpot-{{ tpot_site }}"
+        insertafter: '^VERIFY_TLS='
+
+    - name: Set TPOT_SITE in forwarder .env
+      lineinfile:
+        path: "{{ tpot_path }}/docker/forwarder/.env"
+        regexp: '^TPOT_SITE='
+        line: "TPOT_SITE={{ tpot_site }}"
+        insertafter: '^TPOT_NAME='
+
     - name: Stop T-Pot stack
       become_user: deployer
       command: docker compose down
@@ -51,3 +71,17 @@
           - "'cowrie' in docker_ps.stdout_lines"
         fail_msg: "Cowrie n'est pas démarré."
         success_msg: "Cowrie est bien démarré."
+
+    - name: Create forwarder state directory
+      file:
+        path: "{{ tpot_path }}/docker/forwarder/state"
+        state: directory
+        owner: deployer
+        group: deployer
+        mode: "0755"
+
+    - name: Build and start forwarder
+      become_user: deployer
+      command: docker compose up -d --build
+      args:
+        chdir: "{{ tpot_path }}/docker/forwarder"

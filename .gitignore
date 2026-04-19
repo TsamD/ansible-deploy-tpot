@@ -1,1 +1,5 @@
-/ssh_keys/
+/ssh_keys/*
+!/ssh_keys/.gitkeep
+
+/files/wireguard/*
+!/files/wireguard/.gitkeep

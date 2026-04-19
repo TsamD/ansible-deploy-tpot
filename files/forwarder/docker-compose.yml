@@ -1,0 +1,11 @@
+services:
+  tpot-log-forwarder:
+    build: .
+    image: tpot-log-forwarder:latest
+    container_name: tpot-log-forwarder
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - /home/deployer/tpotce/data/:/tpot-data:ro
+      - ./state:/data/state

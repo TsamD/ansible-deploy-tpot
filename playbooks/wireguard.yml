@@ -15,3 +15,23 @@
           - wireguard
         state: present
         update_cache: true
+
+    - name: Create /etc/wireguard
+      file:
+        path: /etc/wireguard
+        state: directory
+        mode: "0700"
+
+    - name: Copy WireGuard config
+      copy:
+        src: "{{ playbook_dir }}/../files/wireguard/{{ wg_conf }}"
+        dest: /etc/wireguard/wg0.conf
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Enable and restart WireGuard
+      systemd:
+        name: wg-quick@wg0
+        enabled: true
+        state: restarted
